@@ -22,6 +22,23 @@
    :target: https://codecov.io/gh/python-trio/trio
    :alt: Test coverage
 
+.. <!-- BADGIE TIME -->
+
+.. image:: https://results.pre-commit.ci/badge/github/CoolCat467/trio/master.svg
+   :target: https://results.pre-commit.ci/latest/github/CoolCat467/trio/master
+   :alt: pre-commit.ci status
+.. image:: https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit
+   :target: https://github.com/pre-commit/pre-commit
+   :alt: pre-commit
+.. image:: https://img.shields.io/badge/code_style-black-000000.svg
+   :target: https://github.com/psf/black
+   :alt: code style: black
+.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
+   :target: https://github.com/astral-sh/ruff
+   :alt: Ruff
+
+.. <!-- END BADGIE TIME -->
+
 Trio – a friendly Python library for async concurrency and I/O
 ==============================================================
 
