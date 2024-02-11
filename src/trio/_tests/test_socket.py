@@ -9,7 +9,7 @@ import tempfile
 from socket import AddressFamily, SocketKind
 from typing import TYPE_CHECKING, Any, Callable, List, Tuple, Union
 
-import attr
+import attrs
 import pytest
 
 from .. import _core, socket as tsocket
@@ -512,12 +512,12 @@ def gai_without_v4mapped_is_buggy() -> bool:  # pragma: no cover
         return True
 
 
-@attr.s
+@attrs.define(slots=False)
 class Addresses:
-    bind_all: str = attr.ib()
-    localhost: str = attr.ib()
-    arbitrary: str = attr.ib()
-    broadcast: str = attr.ib()
+    bind_all: str
+    localhost: str
+    arbitrary: str
+    broadcast: str
 
 
 # Direct thorough tests of the implicit resolver helpers
@@ -580,12 +580,14 @@ async def test_SocketType_resolve(socket_type: AddressFamily, addrs: Addresses) 
         for local in [False, True]:
 
             async def res(
-                args: tuple[str, int]
-                | tuple[str, int, int]
-                | tuple[str, int, int, int]
-                | tuple[str, str]
-                | tuple[str, str, int]
-                | tuple[str, str, int, int]
+                args: (
+                    tuple[str, int]
+                    | tuple[str, int, int]
+                    | tuple[str, int, int, int]
+                    | tuple[str, str]
+                    | tuple[str, str, int]
+                    | tuple[str, str, int, int]
+                )
             ) -> Any:
                 return await sock._resolve_address_nocp(
                     args,
@@ -624,8 +626,8 @@ async def test_SocketType_resolve(socket_type: AddressFamily, addrs: Addresses) 
                 sock.setsockopt(tsocket.IPPROTO_IPV6, tsocket.IPV6_V6ONLY, True)
                 with pytest.raises(tsocket.gaierror) as excinfo:
                     await res(("1.2.3.4", 80))
-                # Windows, macOS
-                expected_errnos = {tsocket.EAI_NONAME}
+                # Windows, macOS, musl/Linux
+                expected_errnos = {tsocket.EAI_NONAME, tsocket.EAI_NODATA}
                 # Linux
                 if hasattr(tsocket, "EAI_ADDRFAMILY"):
                     expected_errnos.add(tsocket.EAI_ADDRFAMILY)

@@ -24,7 +24,7 @@ from typing import (
     overload,
 )
 
-import attr
+import attrs
 
 import trio
 from trio._util import NoPublicConstructor, final
@@ -83,7 +83,7 @@ def _scatter(data: bytes, buffers: Iterable[Buffer]) -> int:
 T_UDPEndpoint = TypeVar("T_UDPEndpoint", bound="UDPEndpoint")
 
 
-@attr.frozen
+@attrs.frozen
 class UDPEndpoint:
     ip: IPAddress
     port: int
@@ -105,17 +105,17 @@ class UDPEndpoint:
         return cls(ip=ipaddress.ip_address(ip), port=port)
 
 
-@attr.frozen
+@attrs.frozen
 class UDPBinding:
     local: UDPEndpoint
     # remote: UDPEndpoint # ??
 
 
-@attr.frozen
+@attrs.frozen
 class UDPPacket:
     source: UDPEndpoint
     destination: UDPEndpoint
-    payload: bytes = attr.ib(repr=lambda p: p.hex())
+    payload: bytes = attrs.field(repr=lambda p: p.hex())
 
     # not used/tested anywhere
     def reply(self, payload: bytes) -> UDPPacket:  # pragma: no cover
@@ -124,7 +124,7 @@ class UDPPacket:
         )
 
 
-@attr.frozen
+@attrs.frozen
 class FakeSocketFactory(trio.abc.SocketFactory):
     fake_net: FakeNet
 
@@ -132,7 +132,7 @@ class FakeSocketFactory(trio.abc.SocketFactory):
         return FakeSocket._create(self.fake_net, family, type_, proto)
 
 
-@attr.frozen
+@attrs.frozen
 class FakeHostnameResolver(trio.abc.HostnameResolver):
     fake_net: FakeNet
 
@@ -409,12 +409,10 @@ class FakeSocket(trio.socket.SocketType, metaclass=NoPublicConstructor):
         _fake_err(errno.ENOTCONN)
 
     @overload
-    def getsockopt(self, /, level: int, optname: int) -> int:
-        ...
+    def getsockopt(self, /, level: int, optname: int) -> int: ...
 
     @overload
-    def getsockopt(self, /, level: int, optname: int, buflen: int) -> bytes:
-        ...
+    def getsockopt(self, /, level: int, optname: int, buflen: int) -> bytes: ...
 
     def getsockopt(
         self, /, level: int, optname: int, buflen: int | None = None
@@ -423,12 +421,12 @@ class FakeSocket(trio.socket.SocketType, metaclass=NoPublicConstructor):
         raise OSError(f"FakeNet doesn't implement getsockopt({level}, {optname})")
 
     @overload
-    def setsockopt(self, /, level: int, optname: int, value: int | Buffer) -> None:
-        ...
+    def setsockopt(self, /, level: int, optname: int, value: int | Buffer) -> None: ...
 
     @overload
-    def setsockopt(self, /, level: int, optname: int, value: None, optlen: int) -> None:
-        ...
+    def setsockopt(
+        self, /, level: int, optname: int, value: None, optlen: int
+    ) -> None: ...
 
     def setsockopt(
         self,
@@ -469,8 +467,7 @@ class FakeSocket(trio.socket.SocketType, metaclass=NoPublicConstructor):
     @overload
     async def sendto(
         self, __data: Buffer, __address: tuple[object, ...] | str | Buffer
-    ) -> int:
-        ...
+    ) -> int: ...
 
     @overload
     async def sendto(
@@ -478,8 +475,7 @@ class FakeSocket(trio.socket.SocketType, metaclass=NoPublicConstructor):
         __data: Buffer,
         __flags: int,
         __address: tuple[object, ...] | str | None | Buffer,
-    ) -> int:
-        ...
+    ) -> int: ...
 
     async def sendto(self, *args: Any) -> int:
         data: Buffer
