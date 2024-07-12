@@ -24,8 +24,6 @@ from typing import (
 import pytest
 import sniffio
 
-from trio import lowlevel
-
 from .. import (
     CancelScope,
     CapacityLimiter,
