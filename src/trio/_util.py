@@ -127,9 +127,7 @@ def coroutine_or_error(
         # This janky check catches tornado Futures and twisted Deferreds.
         # By the time we're calling this function, we already know
         # something has gone wrong, so a heuristic is pretty safe.
-        if value.__class__.__name__ in ("Future", "Deferred"):
-            return True
-        return False
+        return value.__class__.__name__ in ("Future", "Deferred")
 
     # Make sure a sync-fn-that-returns-coroutine still sees itself as being
     # in trio context
@@ -247,11 +245,7 @@ def async_wraps(
         func.__name__ = attr_name
         func.__qualname__ = ".".join((cls.__qualname__, attr_name))
 
-        func.__doc__ = """Like :meth:`~{}.{}.{}`, but async.
-
-        """.format(
-            wrapped_cls.__module__, wrapped_cls.__qualname__, attr_name
-        )
+        func.__doc__ = f"Like :meth:`~{wrapped_cls.__module__}.{wrapped_cls.__qualname__}.{attr_name}`, but async."
 
         return func
 
