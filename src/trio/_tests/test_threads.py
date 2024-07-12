@@ -30,7 +30,6 @@ from .. import (
     CancelScope,
     CapacityLimiter,
     Event,
-    TrioDeprecationWarning,
     _core,
     fail_after,
     move_on_after,
@@ -40,11 +39,13 @@ from .. import (
 from .._core._tests.test_ki import ki_self
 from .._core._tests.tutil import slow
 from .._threads import (
+    active_thread_count,
     current_default_thread_limiter,
     from_thread_check_cancelled,
     from_thread_run,
     from_thread_run_sync,
     to_thread_run_sync,
+    wait_all_threads_completed,
 )
 from ..testing import wait_all_tasks_blocked
 
@@ -166,8 +167,8 @@ def test_run_in_trio_thread_ki() -> None:
         thread = threading.Thread(target=external_thread_fn)
         thread.start()
         print("waiting")
-        while thread.is_alive():
-            await lowlevel.checkpoint()
+        while thread.is_alive():  # noqa: ASYNC110
+            await sleep(0.01)  # Fine to poll in tests.
         print("waited, joining")
         thread.join()
         print("done")
@@ -376,7 +377,7 @@ async def test_run_in_worker_thread_cancellation() -> None:
     # Put the thread out of its misery:
     q.put(None)
     while register[0] != "finished":
-        time.sleep(0.01)  # noqa: ASYNC101  # Need to wait for OS thread
+        time.sleep(0.01)  # noqa: ASYNC251  # Need to wait for OS thread
 
     # This one can't be cancelled
     record = []
@@ -536,8 +537,10 @@ async def test_run_in_worker_thread_limiter(
             # sure no-one is sneaking past, and to make sure the high_water
             # check below won't fail due to scheduling issues. (It could still
             # fail if too many threads are let through here.)
-            while state.parked != MAX or c.statistics().tasks_waiting != MAX:
-                await lowlevel.checkpoint()  # pragma: no cover
+            while (  # noqa: ASYNC110
+                state.parked != MAX or c.statistics().tasks_waiting != MAX
+            ):
+                await sleep(0.01)  # pragma: no cover
             # Then release the threads
             gate.set()
 
@@ -547,8 +550,8 @@ async def test_run_in_worker_thread_limiter(
             # Some threads might still be running; need to wait to them to
             # finish before checking that all threads ran. We can do this
             # using the CapacityLimiter.
-            while c.borrowed_tokens > 0:
-                await lowlevel.checkpoint()  # pragma: no cover
+            while c.borrowed_tokens > 0:  # noqa: ASYNC110
+                await sleep(0.01)  # pragma: no cover
 
         assert state.ran == COUNT
         assert state.running == 0
@@ -572,7 +575,7 @@ async def test_run_in_worker_thread_custom_limiter() -> None:
 
     # TODO: should CapacityLimiter have an abc or protocol so users can modify it?
     # because currently it's `final` so writing code like this is not allowed.
-    await to_thread_run_sync(lambda: None, limiter=CustomLimiter())  # type: ignore[call-overload]
+    await to_thread_run_sync(lambda: None, limiter=CustomLimiter())  # type: ignore[arg-type]
     assert record == ["acquire", "release"]
 
 
@@ -590,7 +593,7 @@ async def test_run_in_worker_thread_limiter_error() -> None:
     bs = BadCapacityLimiter()
 
     with pytest.raises(ValueError, match="^release on behalf$") as excinfo:
-        await to_thread_run_sync(lambda: None, limiter=bs)  # type: ignore[call-overload]
+        await to_thread_run_sync(lambda: None, limiter=bs)  # type: ignore[arg-type]
     assert excinfo.value.__context__ is None
     assert record == ["acquire", "release"]
     record = []
@@ -599,7 +602,7 @@ async def test_run_in_worker_thread_limiter_error() -> None:
     # chains with it
     d: dict[str, object] = {}
     with pytest.raises(ValueError, match="^release on behalf$") as excinfo:
-        await to_thread_run_sync(lambda: d["x"], limiter=bs)  # type: ignore[call-overload]
+        await to_thread_run_sync(lambda: d["x"], limiter=bs)  # type: ignore[arg-type]
     assert isinstance(excinfo.value.__context__, KeyError)
     assert record == ["acquire", "release"]
 
@@ -909,7 +912,7 @@ async def test_unsafe_abandon_on_cancel_kwarg() -> None:
             raise NotImplementedError
 
     with pytest.raises(NotImplementedError):
-        await to_thread_run_sync(int, abandon_on_cancel=BadBool())  # type: ignore[call-overload]
+        await to_thread_run_sync(int, abandon_on_cancel=BadBool())  # type: ignore[arg-type]
 
 
 async def test_from_thread_reuses_task() -> None:
@@ -1096,23 +1099,48 @@ async def test_reentry_doesnt_deadlock() -> None:
                 nursery.start_soon(child)
 
 
-async def test_cancellable_and_abandon_raises() -> None:
-    with pytest.raises(
-        ValueError,
-        match=r"^Cannot set `cancellable` and `abandon_on_cancel` simultaneously\.$",
-    ):
-        await to_thread_run_sync(bool, cancellable=True, abandon_on_cancel=False)  # type: ignore[call-overload]
+async def test_wait_all_threads_completed() -> None:
+    no_threads_left = False
+    e1 = Event()
+    e2 = Event()
 
-    with pytest.raises(
-        ValueError,
-        match=r"^Cannot set `cancellable` and `abandon_on_cancel` simultaneously\.$",
-    ):
-        await to_thread_run_sync(bool, cancellable=True, abandon_on_cancel=True)  # type: ignore[call-overload]
+    e1_exited = Event()
+    e2_exited = Event()
+
+    async def wait_event(e: Event, e_exit: Event) -> None:
+        def thread() -> None:
+            from_thread_run(e.wait)
+
+        await to_thread_run_sync(thread)
+        e_exit.set()
+
+    async def wait_no_threads_left() -> None:
+        nonlocal no_threads_left
+        await wait_all_threads_completed()
+        no_threads_left = True
+
+    async with _core.open_nursery() as nursery:
+        nursery.start_soon(wait_event, e1, e1_exited)
+        nursery.start_soon(wait_event, e2, e2_exited)
+        await wait_all_tasks_blocked()
+        nursery.start_soon(wait_no_threads_left)
+        await wait_all_tasks_blocked()
+        assert not no_threads_left
+        assert active_thread_count() == 2
+
+        e1.set()
+        await e1_exited.wait()
+        await wait_all_tasks_blocked()
+        assert not no_threads_left
+        assert active_thread_count() == 1
+
+        e2.set()
+        await e2_exited.wait()
+        await wait_all_tasks_blocked()
+        assert no_threads_left
+        assert active_thread_count() == 0
 
 
-async def test_cancellable_warns() -> None:
-    with pytest.warns(TrioDeprecationWarning):
-        await to_thread_run_sync(bool, cancellable=False)
-
-    with pytest.warns(TrioDeprecationWarning):
-        await to_thread_run_sync(bool, cancellable=True)
+async def test_wait_all_threads_completed_no_threads() -> None:
+    await wait_all_threads_completed()
+    assert active_thread_count() == 0
