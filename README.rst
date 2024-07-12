@@ -24,8 +24,8 @@
 
 .. <!-- BADGIE TIME -->
 
-.. image:: https://results.pre-commit.ci/badge/github/CoolCat467/trio/master.svg
-   :target: https://results.pre-commit.ci/latest/github/CoolCat467/trio/master
+.. image:: https://results.pre-commit.ci/badge/github/CoolCat467/trio/main.svg
+   :target: https://results.pre-commit.ci/latest/github/CoolCat467/trio/main
    :alt: pre-commit.ci status
 .. image:: https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit
    :target: https://github.com/pre-commit/pre-commit
